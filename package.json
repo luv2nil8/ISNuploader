@@ -1,0 +1,30 @@
+{
+  "name": "isnuploader",
+  "version": "1.0.0",
+  "description": "Puppeteer Utility to automatically upload attachments to ISN order, as thier API doesn't allow for it.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/luv2nil8/ISNuploader.git"
+  },
+  "keywords": [
+    "Inspection",
+    "Support",
+    "Network",
+    "Attachment",
+    "Uploader"
+  ],
+  "author": "luv2nil8",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/luv2nil8/ISNuploader/issues"
+  },
+  "homepage": "https://github.com/luv2nil8/ISNuploader#readme",
+  "dependencies": {
+    "dotenv": "^8.2.0",
+    "puppeteer": "^5.3.1"
+  }
+}
