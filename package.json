@@ -24,7 +24,12 @@
   },
   "homepage": "https://github.com/luv2nil8/ISNuploader#readme",
   "dependencies": {
+    "body-parser": "^1.19.0",
+    "cors": "^2.8.5",
     "dotenv": "^8.2.0",
-    "puppeteer": "^5.3.1"
+    "express": "^4.17.1",
+    "handlebars": "^4.7.6",
+    "puppeteer": "^5.4.1",
+    "roboto-font": "^0.1.0"
   }
 }

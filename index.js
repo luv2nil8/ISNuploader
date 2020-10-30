@@ -1,154 +1,58 @@
-const puppeteer =  require('puppeteer');
-require('dotenv').config()
+const express = require('express');
+const puppeteer = require('puppeteer');
+const bodyParser = require('body-parser');
+const cors = require('cors');
+const fs = require("fs");
+const path = require("path");
+const handlebars = require("handlebars");
+const upload = require('./upload');
+const pdfCreator = require('./pdfCreator');
+const app = express();
+const port = 80;
+app.use(cors());
+app.use(bodyParser.json());
 
-const NV  = process.env;
-let orderID;
-let filePath;
-let fileName;
-process.argv.slice(2)
-orderID = process.argv.slice(2)[0].toString();
-filePath = process.argv.slice(2)[1].toString();
-fileName = filePath.replace(/^.*[\\\/]/, '');
-(async function main() {
-    const browser = await puppeteer.launch(
-        {
-            headless: false
-        }
-    );
-    const page = await browser.newPage();
-    await page.goto(NV.BASE_URL+NV.COMPANY);
-    await page.waitForSelector('input#username');
-    console.log('Page Loaded...');
 
-    await page.click('input#username');
-    await page.keyboard.type(NV.USER);
-    await page.click('input#password');
-    await page.keyboard.type(NV.PASSWORD);
-    await page.click('button#login');
-    await page.waitForNavigation();
-    console.log('Log In Successful...')
+  app.post('/uploadToIsn', async (req, res) => {
+    const key = req.body.key;
+    const secret = req.body.secret;
+    const oid = req.body.oid;
+    const report = req.body.report;
+
+    console.log(req.body);
+    res.send(req.body);
+
     
-/*Search from Search Box, and click on first Item that matches input args. */
-    await page.waitForSelector('input#isn_search');
-
-
-    await page.click('input#isn_search')
-    .catch(async ()=>{
-        await page.waitForTimeout(250);
-        await page.click('input#isn_search')
-            .catch(async()=>{
-            await page.waitForTimeout(250);
-            await page.click('input#isn_search');
-        });
+    const browser = await puppeteer.launch({
+      args: ['--no-sandbox'],
+      headless: false
     });
+    var page = await browser.newPage();
+    await page.setViewport({ width: 1100, height: 1000});
 
-    await page.keyboard.type(orderID);
-    await page.keyboard.press('Enter');
-    await page.waitForSelector('.fastSearchResult td span');
-    await page.click('.fastSearchResult td');
-    console.log('Navigated to Order...');
-    await page.waitForSelector('button.dropdown-toggle');
-    await page.click('button.dropdown-toggle');
+    let saveLocation = report.address.trim().replace(/\s|,|-|\.|\/|\\,/g, '_').replace(/\_+/g, '_') + '.pdf';
+		var templateHtml = fs.readFileSync(path.join(process.cwd(), 'reportTemplate.html'), 'utf8');
+		var template = handlebars.compile(templateHtml);
+		var html = template(report);
+		fs.writeFile('./report.html', html,()=>{});
+	
     
-/* Compare all Links to find the Upload Attachments Link, and Click it. 
-(Inner Text is only identifiable attribute, and cannot be selected for 
-manually due to random whitespace) */
-    let linkTextArr = await page.$$eval('a', (links) => {
-        return links.map((links) => {
-            return links.innerText
-        });
-    })
-    let uploadLinkIndex = linkTextArr.findIndex((item)=>{ return item.match(/View\/Upload Attachments/g) });;
-    let uploadLink = (await page.$$('a'))[uploadLinkIndex];
-    await uploadLink.click();
-    await page.waitForNavigation();
-    console.log('Navigated to Upload Page')
-
-/*Initialize a file chooser listener to catch when choose
-file button is pressed, then upload file from args*/
-    await page.waitForSelector('a.upload-btn')
-    const [fileChooser] = await Promise.all([
-        page.waitForFileChooser(),
-        page.click('a.upload-btn'), // some button that triggers file selection
-    ]);
-    await fileChooser.accept([filePath]);
-    page.waitForSelector('.triggerUpload');
-    await page.click('.triggerUpload');
-    console.log('Uploaded File...');
-    await page.waitForTimeout(500);
-
-    /*make sure uploaded file is public */
-    await page.waitForSelector('table#attachments tbody tr a[title="Attachment is not public. Click to make public."]');
-    let tableRows = await page.$$('table#attachments tbody tr')
-    let rowIndex;
+		await page.goto(__dirname+'/report.html', {
+      waitUntil: 'networkidle0'
+    });
     
-    await new Promise((resolve, reject) => {
-        tableRows.forEach(async (tableRow, i) => {
-            tableRow = await (await tableRow.getProperty('innerText')).jsonValue();
-            if (/test.txt/gm.test(tableRow)) {
-                rowIndex = i; 
-            }
-            if (i === tableRows.length - 1) {
-                resolve();
-            }
-        });
-    });
-    try {
-        let publicButton = await (await page.$$('table#attachments tbody tr'))[rowIndex]
-            .$('a[title="Attachment is not public. Click to make public."]')
-        await publicButton.click()
-        console.log('Making Public...')
-    } catch (error) {
-        console.log(error);
-        console.log('Already Public...')
-    }
-    await page.waitForNavigation();
-    tableRows = await page.$$('table#attachments tbody tr')
-    try {
-        let emailButton = await (await page.$$('table#attachments tbody tr'))[rowIndex]
-            .$('a[title="Email Attachment"]')
-        await emailButton.click()
-        console.log('Navigating To Email...')
-    } catch (error) {
-        console.log(error);
-    }
+    var pdfPath = path.join('pdf', saveLocation);
+    var options = {
+			printBackground: true,
+			path: pdfPath
+		}
+    await page.pdf(options).catch(()=>{});
+    
+    console.log('PDFpath: '+pdfPath);
+    await upload.init({key: key, secret: secret, oid: oid}, pdfPath, page)
+    await browser.close();
+  });
 
-    /* Build a list of buttons to click to apply correct recipients to emails, then send the emails off */
-    await page.waitForNavigation();
-    console.log('Building Button List...')
-    let dropdowns = await page.$$('div')
-    let clientDD; 
-    let agentDD;
-    await new Promise( (resolve, reject) => { //lock this part down, so clicking doesn't happen before all buttons are resolved
-        let count = 0;
-        dropdowns.forEach(async (DD, i)=> {
-            let innerText = await DD.$eval('strong',(node) => {
-                return node.innerText;
-            }).catch(()=>{});
+app.listen(port, () => console.log(`Hello world app listening on port ${port}!`));
 
-            if (/.*client.*/gmi.test(innerText)) {
-                clientDD = await DD.$('button.dropdown-toggle');
-                count++;
-            }
-            else if (/.*buyer.*/gmi.test(innerText)){
-                agentDD = await DD.$('button.dropdown-toggle');
-                count++;
-            } else { count++ } 
-            if (count === dropdowns.length) {
-                resolve();
-            }
-        });
-    });
-    console.log('Recipients Added...')
-    await clientDD.click();
-    await page.keyboard.press('ArrowDown')
-    await page.waitForTimeout(10);
-    await page.keyboard.press('Enter')
-    await page.waitForTimeout(100);
-    await agentDD.click();
-    await page.keyboard.press('ArrowDown')
-    await page.waitForTimeout(10);
-    await page.keyboard.press('Enter')
-    // await page.click('button#emailattachmentlink') only uncomment if you mean business.
-    console.log('Emails Sent, Finishing')
-})();
+
