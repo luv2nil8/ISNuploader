@@ -14,36 +14,32 @@ async function main(){
   const text = buff.toString('utf-8');
   const report = JSON.parse(text);
 
+  //console.log(`Key: ${key}  Secret: ${secret} oid: ${oid} Report: ${report}`);
+  
   const browser = await puppeteer.launch({
-    args: ['--no-sandbox'],
-    headless: false
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
+    // headless: false
   });
-  var page = await browser.newPage();
+  let page = await browser.newPage();
   await page.setViewport({ width: 1100, height: 1000});
   
   let saveLocation = report.address.trim().replace(/\s|,|-|\.|\/|\\,/g, '_').replace(/\_+/g, '_') + '.pdf';
-  var templateHtml = fs.readFileSync(path.join(process.cwd(), 'reportTemplate.html'), 'utf8');
-  var template = handlebars.compile(templateHtml);
-  var html = template(report);
-  fs.writeFile('./report.html', html,()=>{});
-  
-  
-  await page.goto(__dirname+'/report.html', {
+  let templateHtml = fs.readFileSync(path.join(process.cwd(), 'reportTemplate.html'), 'utf8');
+  let template = handlebars.compile(templateHtml);
+  let html = template(report);
+
+  await page.setContent(html, {
     waitUntil: 'networkidle0'
   });
   
-  var pdfPath = path.join('pdf', saveLocation);
-  var options = {
+  let options = {
     printBackground: true,
-    path: pdfPath
+    path: saveLocation
   }
-  await page.pdf(options).catch(()=>{});
+  page.pdf(options);
   
-  console.log('PDFpath: '+pdfPath);
-  await upload.init({key: key, secret: secret, oid: oid}, pdfPath, page)
+  await upload.init({key: key, secret: secret, oid: oid}, saveLocation, page);
+  fs.unlinkSync(saveLocation);
   await browser.close();
 }
-main();
-  
-  
-  
+main().then(()=>{process.exit();}).catch((err)=>{ console.log(err); fs.writeFile('./error.txt', 'Errors: '+err,()=>{process.exit();})});

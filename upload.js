@@ -1,12 +1,11 @@
 const puppeteer = require("puppeteer");
 require("dotenv").config();
+const NV = process.env;
 
 module.exports = {
   init: async function (credentials, filePath, page) {
-    const NV = process.env;
     fileName = filePath.replace(/^.*[\\\/]/, "");
-
-    await page.goto(NV.BASE_URL + NV.COMPANY);
+    await page.goto(NV.BASE_URL+NV.COMPANY);
     await page.waitForSelector("input#username");
     console.log("Page Loaded...");
 
@@ -147,7 +146,7 @@ module.exports = {
     await page.keyboard.press("ArrowDown");
     await page.waitForTimeout(10);
     await page.keyboard.press("Enter");
-    // await page.click('button#emailattachmentlink') only uncomment if you mean business.
+    await page.click('button#emailattachmentlink');
     console.log("Emails Sent, Finishing");
   }
 };
